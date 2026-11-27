@@ -6,13 +6,14 @@ Además de las rutas de negocio, la app publica métricas para Prometheus en /me
 Las métricas de seguridad (logins fallidos y peticiones sospechosas) se ven en Grafana.
 """
 
+import hmac
 import os
 import re
 import secrets
 import sqlite3
 import time
 
-from flask import Flask, Response, g, jsonify, render_template_string, request
+from flask import Flask, Response, g, jsonify, render_template_string, request, session
 from prometheus_client import CONTENT_TYPE_LATEST, Counter, Gauge, Histogram, generate_latest
 from markupsafe import escape
 from werkzeug.security import check_password_hash
@@ -24,6 +25,7 @@ SECRET_KEY = os.environ.get("SECRET_KEY") or secrets.token_hex(32)
 ADMIN_USUARIO = "admin"
 ADMIN_CLAVE_HASH = os.environ.get("ADMIN_CLAVE_HASH", "")
 app.config["SECRET_KEY"] = SECRET_KEY
+app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 
 ## Versión desplegada: la inyecta el pipeline (1.0.<build>+<commit>). Sirve para la trazabilidad.
 VERSION = os.environ.get("APP_VERSION", "dev")
@@ -70,6 +72,7 @@ PORTADA = """<!doctype html>
 </form>
 <h2>Acceso administrador</h2>
 <form action="/login" method="post">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
   <input name="usuario" value="admin"> <input name="clave" type="password" value="">
   <button type="submit">Entrar</button>
 </form>
@@ -144,7 +147,9 @@ def portada():
     @brief Portada HTML con enlaces y formularios del sistema.
     @return Página HTML.
     """
-    return render_template_string(PORTADA, version=VERSION)
+    if "csrf_token" not in session:
+        session["csrf_token"] = secrets.token_hex(32)
+    return render_template_string(PORTADA, version=VERSION, csrf_token=session["csrf_token"])
 
 
 @app.route("/hello")
@@ -219,6 +224,10 @@ def login():
     @brief Valida las credenciales del administrador enviadas por formulario.
     @return JSON con el resultado; 401 si las credenciales no son válidas.
     """
+    token = request.form.get("csrf_token", "")
+    token_sesion = session.get("csrf_token", "")
+    if not token_sesion or not hmac.compare_digest(token.encode(), token_sesion.encode()):
+        return jsonify({"error": "Token CSRF inválido"}), 400
     usuario = request.form.get("usuario", "")
     clave = request.form.get("clave", "")
     if usuario == ADMIN_USUARIO and check_password_hash(ADMIN_CLAVE_HASH, clave):
