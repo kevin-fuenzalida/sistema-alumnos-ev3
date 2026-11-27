@@ -18,6 +18,7 @@ pipeline {
 
     environment {
         PIP_DISABLE_PIP_VERSION_CHECK = '1'
+	ADMIN_CLAVE_HASH = credentials('admin-clave-hash')
     }
 
     stages {
