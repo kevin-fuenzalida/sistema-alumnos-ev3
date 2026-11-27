@@ -8,6 +8,7 @@ Las métricas de seguridad (logins fallidos y peticiones sospechosas) se ven en 
 
 import os
 import re
+import secrets
 import sqlite3
 import time
 
@@ -19,7 +20,7 @@ from werkzeug.security import check_password_hash
 app = Flask(__name__)
 
 ## Clave de la aplicación y credenciales del administrador.
-SECRET_KEY = "SecureDev-2024-clave-super-secreta"
+SECRET_KEY = os.environ.get("SECRET_KEY") or secrets.token_hex(32)
 ADMIN_USUARIO = "admin"
 ADMIN_CLAVE_HASH = os.environ.get("ADMIN_CLAVE_HASH", "")
 app.config["SECRET_KEY"] = SECRET_KEY
